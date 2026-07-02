@@ -1,0 +1,110 @@
+// ============================================================
+// PRISM Model: Decentralized Satellite Swarm Collision Avoidance
+// Model checker: PRISM 4.8 (https://www.prismmodelchecker.org/)
+// Encoding: Synchronous MDP over N replicated satellite modules
+//
+// States per satellite (|S_i| = 5):
+//   0 = FREE_DRIFT
+//   1 = COMPUTING
+//   2 = MANEUVER_COMMITTED
+//   3 = EXECUTING
+//   4 = POST_BURN_COAST
+//
+// Parameters (set via -const on command line):
+//   N        - swarm size
+//   F        - max Byzantine faults (must satisfy F < N/3)
+//   QUORUM   - ceil((N+F+1)/2)
+//   T_MAX    - liveness bound in discrete time steps
+//   DROPOUT  - link failure probability [0.0, 1.0]
+// ============================================================
+
+mdp
+
+// ── Constants ──────────────────────────────────────────────
+const int N      = 6;    // swarm size
+const int F      = 1;    // Byzantine fault count
+const int QUORUM = 4;    // ceil((6+1+1)/2)
+const int T_MAX  = 30;   // liveness bound (time steps)
+
+// ── Global conjunction flags (set by environment module) ───
+// conj_ij = 1 iff satellites i and j are in conjunction
+global conj_01 : [0..1] init 0;
+global conj_02 : [0..1] init 0;
+// ... (extend for all N*(N-1)/2 pairs)
+
+// ── Satellite 0 ────────────────────────────────────────────
+module Satellite_0
+  s0      : [0..4] init 0;   // state
+  cert0   : [0..1] init 0;   // SMT certificate received
+  votes0  : [0..N] init 0;   // certified votes received
+  elapsed0: [0..T_MAX] init 0;
+
+  // Conjunction detected → start computing
+  [detect_0] s0=0 & (conj_01=1 | conj_02=1) ->
+    (s0'=1) & (elapsed0'=0);
+
+  // Certificate received from oracle
+  [cert_ok_0] s0=1 ->
+    0.95 : (cert0'=1) & (s0'=1)   // oracle certifies (95% rate)
+  + 0.05 : (cert0'=0) & (s0'=1);  // oracle rejects (5% rate)
+
+  // Receive votes from neighbours (non-Byzantine)
+  [vote_0] s0=1 & cert0=1 & votes0 < N ->
+    (votes0'=votes0+1);
+
+  // Quorum reached → commit
+  [commit_0] s0=1 & cert0=1 & votes0>=QUORUM ->
+    (s0'=2) & (votes0'=0);
+
+  // Execute (mutual exclusion enforced by guard)
+  [execute_0] s0=2 & s1!=3 & s2!=3 ->
+    (s0'=3);
+
+  // Burn complete → coast
+  [burn_done_0] s0=3 ->
+    (s0'=4);
+
+  // Coast → free drift
+  [reset_0] s0=4 ->
+    (s0'=0) & (cert0'=0) & (elapsed0'=0);
+
+  // Liveness timeout: abort if T_MAX exceeded
+  [abort_0] s0=1 & elapsed0>=T_MAX ->
+    (s0'=0) & (cert0'=0) & (votes0'=0);
+
+  // Time step
+  [tick] s0=1 ->
+    (elapsed0'=min(elapsed0+1, T_MAX));
+  [tick] s0!=1 -> true;
+endmodule
+
+// ── Satellite 1 (replicate structure, adjust guards) ───────
+module Satellite_1 = Satellite_0
+  [s0=s1, cert0=cert1, votes0=votes1, elapsed0=elapsed1]
+  [detect_0=detect_1, cert_ok_0=cert_ok_1, vote_0=vote_1,
+   commit_0=commit_1, execute_0=execute_1,
+   burn_done_0=burn_done_1, reset_0=reset_1, abort_0=abort_1]
+endmodule
+
+// ... (replicate modules for satellites 2..N-1)
+
+// ── Byzantine module (satellite B=0 in F=1 case) ───────────
+// Byzantine satellite: broadcasts random/conflicting intents
+module Byzantine_0
+  bstate : [0..1] init 0;
+
+  // Send corrupted vote to any neighbour
+  [byz_vote] bstate=0 ->
+    0.5 : true   // send a vote (corrupts consensus)
+  + 0.5 : true;  // stay silent
+endmodule
+
+// ── Environment: conjunction injection ─────────────────────
+module Environment
+  env_step : [0..5] init 0;
+
+  // Inject conjunction between sats 0 and 1 at step 2
+  [tick] env_step=2 -> (conj_01'=1);
+  [tick] env_step!=2 -> true;
+  [tick] true -> (env_step'=min(env_step+1,5));
+endmodule

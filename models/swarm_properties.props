@@ -1,0 +1,31 @@
+// ============================================================
+// PRISM Property Specifications: LTL and PCTL
+// Load with: prism satellite_swarm.prism swarm_properties.props
+// ============================================================
+
+// ── P1: Mutual Exclusion (Safety) ──────────────────────────
+// No two satellites in the same conjunction pair simultaneously execute burns.
+// Checked as an invariant (G = globally).
+P>=1 [ G !(s0=3 & s1=3 & conj_01=1) ]
+
+// ── P2: Separation Invariance during Execution ─────────────
+// When satellite 0 is executing, its SMT certificate must hold.
+// (Certificate is a Boolean abstraction of the continuous predicate.)
+P>=1 [ G (s0=3 => cert0=1) ]
+
+// ── P3: Bounded Liveness ───────────────────────────────────
+// If a conjunction is detected, a committed maneuver must follow within T_MAX steps.
+// Uses PCTL bounded-future operator F[0,T_MAX].
+P>=1 [ G ((conj_01=1 & s0=1) => F[0,T_MAX] s0=2) ]
+
+// ── P4: Protocol Termination (No Deadlock) ─────────────────
+// Every satellite must eventually return to FREE_DRIFT or COAST.
+P>=1 [ G F (s0=0 | s0=4) ]
+P>=1 [ G F (s1=0 | s1=4) ]
+
+// ── Quantitative: Probability of P3 within 20 steps ────────
+// (PCTL probabilistic query — useful with dropout > 0)
+P=? [ F[0,20] s0=2 ]
+
+// ── Expected time to commitment ────────────────────────────
+R{"steps"}=? [ F s0=2 ]
