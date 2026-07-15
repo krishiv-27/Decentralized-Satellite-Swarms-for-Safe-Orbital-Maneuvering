@@ -152,8 +152,8 @@ Results are deterministic on any platform with NumPy ≥ 1.24 and SciPy ≥ 1.9.
   title   = {Formal Verification of Decentralized Satellite Swarms
              for Safe Orbital Maneuvering: An Empirical Study},
   author  = {[Author names withheld for review]},
-  journal = {IEEE Transactions on Aerospace and Electronic Systems},
-  year    = {2025},
+  journal = {Arxiv},
+  year    = {2026},
   note    = {Under review}
 }
 ```
