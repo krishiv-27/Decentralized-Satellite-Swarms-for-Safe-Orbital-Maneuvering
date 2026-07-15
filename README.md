@@ -2,8 +2,7 @@
 
 **Empirical Study — Full Reproducible Codebase**
 
-> Companion repository for the peer-reviewed paper submitted to  
-> *IEEE Transactions on Aerospace and Electronic Systems*
+
 
 ---
 
